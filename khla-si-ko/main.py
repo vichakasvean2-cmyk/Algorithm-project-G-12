@@ -3,7 +3,9 @@
 import math
 import struct
 import sys
+import time
 
+from src.audio_manager import AudioManager
 from src.camera_control import CameraControl
 from src.config import FPS, WINDOW_HEIGHT, WINDOW_WIDTH
 from src.renderer import GameRenderer
@@ -13,6 +15,8 @@ try:
     import pygame
 except ImportError:  # pragma: no cover - runtime dependency check
     pygame = None
+
+COUNTDOWN_SECONDS = 2
 
 
 def _startup_sound_samples(sample_rate: int = 22050, duration: float = 0.7) -> bytes:
@@ -61,15 +65,86 @@ def main() -> None:
     renderer = GameRenderer(screen)
     game = TigerCowsGame()
     camera = CameraControl()
+    audio = AudioManager()
     previous_pinching = False
     in_game = False
+    settings_open = False
+    countdown_started_at: float | None = None
+    last_countdown_number = COUNTDOWN_SECONDS + 1
+    last_announced_winner: str | None = None
 
     def start_game() -> None:
-        nonlocal in_game
+        nonlocal in_game, countdown_started_at, last_announced_winner
         game.reset()
         in_game = True
+        countdown_started_at = None
+        last_announced_winner = None
         camera.set_smile_detection_enabled(False)
-        play_startup_sound()
+        if audio.enabled:
+            play_startup_sound()
+
+    def request_start() -> None:
+        nonlocal countdown_started_at, last_countdown_number
+        if audio.enabled and audio.countdown_enabled:
+            countdown_started_at = time.perf_counter()
+            last_countdown_number = COUNTDOWN_SECONDS + 1
+        else:
+            start_game()
+
+    def apply_node(node: int, gesture: bool = False) -> None:
+        nonlocal last_announced_winner
+        accepted = game.click_node(node)
+        if not accepted:
+            return
+
+        winner = game.winner
+        if winner is not None:
+            if winner != last_announced_winner:
+                result_sound = "draw" if winner == "Draw" else "win" if winner == "Cows" else "lose"
+                audio.play(result_sound)
+                last_announced_winner = winner
+        elif gesture:
+            last_announced_winner = None
+            audio.play("gesture")
+        else:
+            last_announced_winner = None
+
+    def handle_camera_click(
+        screen_position: tuple[int, int],
+        board_position: tuple[int, int],
+    ) -> None:
+        nonlocal in_game, settings_open
+        if settings_open:
+            option = renderer.settings_option_at(screen_position)
+            if option == "audio":
+                audio.enabled = not audio.enabled
+            elif option == "countdown":
+                audio.countdown_enabled = not audio.countdown_enabled
+            elif option == "gesture":
+                audio.gesture_enabled = not audio.gesture_enabled
+            elif option == "close":
+                settings_open = False
+            return
+
+        if in_game and game.winner is not None and renderer.result_back_at(screen_position):
+            in_game = False
+            camera.set_smile_detection_enabled(True)
+        elif renderer.settings_button_at(screen_position):
+            settings_open = True
+        elif not in_game:
+            level = renderer.home_level_at(screen_position)
+            if level is not None:
+                game.set_level(level)
+            elif renderer.home_start_at(screen_position):
+                request_start()
+        else:
+            level = renderer.level_at(screen_position)
+            if level is not None:
+                game.set_level(level)
+            elif game.winner is None and not renderer.is_animating(game):
+                node = renderer.board_node_at(board_position)
+                if node is not None:
+                    apply_node(node, gesture=True)
 
     try:
         running = True
@@ -82,6 +157,10 @@ def main() -> None:
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_q:
                         running = False
+                    elif event.key == pygame.K_s:
+                        settings_open = not settings_open
+                    elif settings_open and event.key == pygame.K_ESCAPE:
+                        settings_open = False
                     elif event.key in (pygame.K_ESCAPE, pygame.K_h):
                         if in_game:
                             in_game = False
@@ -89,7 +168,8 @@ def main() -> None:
                         else:
                             running = False
                     elif event.key in (pygame.K_SPACE, pygame.K_RETURN) and not in_game:
-                        start_game()
+                        if not settings_open and countdown_started_at is None:
+                            request_start()
                     elif event.key == pygame.K_r:
                         game.reset()
                     elif event.key == pygame.K_1:
@@ -99,12 +179,27 @@ def main() -> None:
                     elif event.key == pygame.K_3:
                         game.set_level("Hard")
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    if not in_game:
+                    if settings_open:
+                        option = renderer.settings_option_at(event.pos)
+                        if option == "audio":
+                            audio.enabled = not audio.enabled
+                        elif option == "countdown":
+                            audio.countdown_enabled = not audio.countdown_enabled
+                        elif option == "gesture":
+                            audio.gesture_enabled = not audio.gesture_enabled
+                        elif option == "close":
+                            settings_open = False
+                    elif in_game and game.winner is not None and renderer.result_back_at(event.pos):
+                        in_game = False
+                        camera.set_smile_detection_enabled(True)
+                    elif renderer.settings_button_at(event.pos):
+                        settings_open = True
+                    elif not in_game:
                         level = renderer.home_level_at(event.pos)
                         if level is not None:
                             game.set_level(level)
                         elif renderer.home_start_at(event.pos):
-                            start_game()
+                            request_start()
                     else:
                         level = renderer.level_at(event.pos)
                         if level is not None:
@@ -112,23 +207,41 @@ def main() -> None:
                         else:
                             node = renderer.board_node_at(event.pos)
                             if node is not None and not renderer.is_animating(game):
-                                game.click_node(node)
+                                apply_node(node)
 
             smile_triggered = camera.consume_smile_trigger()
-            if not in_game and smile_triggered:
-                start_game()
+            if not in_game and not settings_open and countdown_started_at is None and smile_triggered:
+                request_start()
 
-            if (
-                in_game
-                and camera_point is not None
-                and pinching
-                and not previous_pinching
-                and not renderer.is_animating(game)
-            ):
-                cursor_position = renderer.camera_point_to_board(camera_point)
-                node = renderer.board_node_at(cursor_position)
-                if node is not None:
-                    game.click_node(node)
+            camera_screen_position = (
+                renderer.camera_point_to_screen(camera_point, screen.get_size())
+                if camera_point is not None
+                else None
+            )
+            camera_ui_target = (
+                camera_screen_position is not None
+                and renderer.camera_ui_target_at(
+                    camera_screen_position,
+                    in_game,
+                    settings_open,
+                    game.winner is not None,
+                )
+            )
+
+            countdown_value: int | None = None
+            if countdown_started_at is not None:
+                elapsed = time.perf_counter() - countdown_started_at
+                if elapsed >= COUNTDOWN_SECONDS:
+                    start_game()
+                else:
+                    countdown_value = COUNTDOWN_SECONDS - int(elapsed)
+                    if countdown_value != last_countdown_number:
+                        audio.play("countdown")
+                        last_countdown_number = countdown_value
+
+            if camera_screen_position is not None and pinching and not previous_pinching:
+                board_position = renderer.camera_point_to_board(camera_point)
+                handle_camera_click(camera_screen_position, board_position)
             previous_pinching = pinching
 
             if not camera_ready:
@@ -147,12 +260,26 @@ def main() -> None:
                     screen,
                     game,
                     camera_frame=camera_frame,
-                    camera_point=camera_point,
+                    camera_point=None if camera_ui_target else camera_point,
                     pinching=pinching,
                     camera_status=camera_status,
                 )
             else:
                 renderer.render_home(screen, game, camera_frame=camera_frame, camera_status=camera_status)
+            if countdown_value is not None:
+                renderer.render_countdown(screen, countdown_value)
+            if settings_open:
+                renderer.render_settings_overlay(
+                    screen,
+                    audio_enabled=audio.enabled,
+                    countdown_enabled=audio.countdown_enabled,
+                    gesture_enabled=audio.gesture_enabled,
+                    audio_available=audio.available,
+                )
+            if camera_screen_position is not None and (
+                not in_game or settings_open or camera_ui_target
+            ):
+                renderer.draw_camera_pointer(camera_screen_position, pinching)
             pygame.display.flip()
             clock.tick(FPS)
     finally:

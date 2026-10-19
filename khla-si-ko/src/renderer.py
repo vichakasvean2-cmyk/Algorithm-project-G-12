@@ -58,6 +58,8 @@ class GameRenderer:
         self._fonts = {}
         self._animated_move_count = -1
         self._animation_started_at = 0.0
+        self._result_winner: str | None = None
+        self._result_started_at = 0.0
         self._background = self._make_wood_background(screen.get_size())
 
     @staticmethod
@@ -103,6 +105,31 @@ class GameRenderer:
         return 250 <= x <= 690 and 455 <= y <= 545
 
     @staticmethod
+    def settings_button_at(position: tuple[int, int]) -> bool:
+        x, y = position
+        return (850 <= x <= 1115 and 590 <= y <= 625) or (988 <= x <= 1228 and 598 <= y <= 641)
+
+    @staticmethod
+    def result_back_at(position: tuple[int, int]) -> bool:
+        x, y = position
+        return 530 <= x <= 750 and 420 <= y <= 465
+
+    @staticmethod
+    def settings_option_at(position: tuple[int, int]) -> str | None:
+        x, y = position
+        if not 420 <= x <= 860:
+            return None
+        if 275 <= y <= 325:
+            return "audio"
+        if 345 <= y <= 395:
+            return "countdown"
+        if 415 <= y <= 465:
+            return "gesture"
+        if 485 <= y <= 530:
+            return "close"
+        return None
+
+    @staticmethod
     def camera_point_to_board(point: tuple[float, float]) -> tuple[int, int]:
         x, y = point
         x = max(0.0, min(1.0, 1.0 - x))
@@ -111,6 +138,42 @@ class GameRenderer:
             round(BOARD_LEFT + CELL_SIZE // 2 + x * CELL_SIZE * (BOARD_SIZE - 1)),
             round(BOARD_TOP + CELL_SIZE // 2 + y * CELL_SIZE * (BOARD_SIZE - 1)),
         )
+
+    @staticmethod
+    def camera_point_to_screen(
+        point: tuple[float, float],
+        screen_size: tuple[int, int],
+    ) -> tuple[int, int]:
+        x, y = point
+        x = max(0.0, min(1.0, 1.0 - x))
+        y = max(0.0, min(1.0, y))
+        return round(x * (screen_size[0] - 1)), round(y * (screen_size[1] - 1))
+
+    @staticmethod
+    def camera_ui_target_at(
+        position: tuple[int, int],
+        in_game: bool,
+        settings_open: bool,
+        game_over: bool,
+    ) -> bool:
+        if settings_open:
+            return GameRenderer.settings_option_at(position) is not None
+        if in_game:
+            return (
+                GameRenderer.settings_button_at(position)
+                or (game_over and GameRenderer.result_back_at(position))
+                or (not game_over and GameRenderer.level_at(position) is not None)
+            )
+        return (
+            GameRenderer.settings_button_at(position)
+            or GameRenderer.home_level_at(position) is not None
+            or GameRenderer.home_start_at(position)
+        )
+
+    def draw_camera_pointer(self, position: tuple[int, int], pinching: bool = False) -> None:
+        color = (255, 222, 82) if pinching else (94, 233, 161)
+        pygame.draw.circle(self.screen, color, position, 18, 3)
+        pygame.draw.circle(self.screen, color, position, 5 if pinching else 3)
 
     @staticmethod
     def _make_wood_background(size: tuple[int, int]):
@@ -335,6 +398,99 @@ class GameRenderer:
         pygame.draw.rect(self.screen, GOLD, preview_rect, 2, border_radius=8)
         self._draw_text("CAMERA", preview_rect.centerx, preview_rect.bottom + 9, size=17, bold=True, center=True)
 
+    def _draw_settings_button(self, rect: tuple[int, int, int, int]) -> None:
+        button = pygame.Rect(rect)
+        pygame.draw.rect(self.screen, (78, 49, 30), button, border_radius=8)
+        pygame.draw.rect(self.screen, GOLD, button, 2, border_radius=8)
+        self._draw_text("SETTINGS  (S)", button.centerx, button.y + 7, size=17, bold=True, center=True)
+
+    def render_settings_overlay(
+        self,
+        screen,
+        audio_enabled: bool,
+        countdown_enabled: bool,
+        gesture_enabled: bool,
+        audio_available: bool,
+    ) -> None:
+        if pygame is None:
+            return
+
+        shade = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+        shade.fill((20, 12, 7, 190))
+        screen.blit(shade, (0, 0))
+        panel = pygame.Rect(390, 165, 500, 390)
+        self._draw_panel(panel, fill=(96, 57, 31))
+        self._draw_text("AUDIO SETTINGS", panel.centerx, 194, size=31, color=GOLD, bold=True, center=True)
+
+        options = (
+            ("Audio", audio_enabled, "audio"),
+            ("Countdown sound", countdown_enabled, "countdown"),
+            ("Gesture confirmation", gesture_enabled, "gesture"),
+        )
+        for index, (label, enabled, _) in enumerate(options):
+            y = 280 + index * 70
+            self._draw_text(label, 435, y + 8, size=21, color=CREAM, bold=True)
+            state = "ON" if enabled else "OFF"
+            button = pygame.Rect(730, y, 115, 43)
+            pygame.draw.rect(self.screen, (130, 91, 45) if enabled else (64, 43, 31), button, border_radius=9)
+            pygame.draw.rect(self.screen, GOLD, button, 2, border_radius=9)
+            self._draw_text(state, button.centerx, button.y + 9, size=19, color=CREAM, bold=True, center=True)
+
+        if not audio_available:
+            self._draw_text("Audio device unavailable", panel.centerx, 490, size=16, color=(255, 184, 138), center=True)
+        close_button = pygame.Rect(535, 505, 210, 38)
+        pygame.draw.rect(self.screen, (78, 49, 30), close_button, border_radius=9)
+        pygame.draw.rect(self.screen, GOLD, close_button, 2, border_radius=9)
+        self._draw_text("CLOSE  (S / Esc)", close_button.centerx, close_button.y + 8,
+                        size=17, color=CREAM, bold=True, center=True)
+
+    def render_countdown(self, screen, count: int) -> None:
+        if pygame is None:
+            return
+
+        shade = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+        shade.fill((20, 12, 7, 150))
+        screen.blit(shade, (0, 0))
+        panel = pygame.Rect(445, 240, 390, 245)
+        self._draw_panel(panel, fill=(96, 57, 31))
+        self._draw_text("GET READY", panel.centerx, 270, size=30, color=GOLD, bold=True, center=True)
+        pulse = 1 + 0.05 * math.sin(time.perf_counter() * 7)
+        self._draw_text(str(count), panel.centerx, 319, size=round(106 * pulse), color=CREAM,
+                        bold=True, center=True)
+
+    def _draw_result_animation(self, game: TigerCowsGame) -> None:
+        if game.winner != self._result_winner:
+            self._result_winner = game.winner
+            self._result_started_at = time.perf_counter()
+        if game.winner is None:
+            return
+
+        now = time.perf_counter()
+        elapsed = now - self._result_started_at
+        shade = pygame.Surface(self.screen.get_size(), pygame.SRCALPHA)
+        shade.fill((20, 12, 7, 145))
+        self.screen.blit(shade, (0, 0))
+
+        center = (self.screen.get_width() // 2, self.screen.get_height() // 2)
+        pulse = math.sin(elapsed * 4)
+        radius = round(48 + 8 * pulse)
+        color = (150, 224, 130) if game.winner == "Cows" else (255, 191, 92)
+        if game.winner == "Draw":
+            color = (190, 190, 220)
+        pygame.draw.circle(self.screen, color, center, radius, 4)
+
+        panel = pygame.Rect(300, 235, 680, 250)
+        self._draw_panel(panel, fill=(96, 57, 31))
+        result = "DRAW!" if game.winner == "Draw" else f"{game.winner.upper()} WIN!"
+        self._draw_text(result, panel.centerx, panel.y + 43, size=42, color=color, bold=True, center=True)
+        self._draw_wrapped_text(game.status, panel.x + 55, panel.y + 113, panel.width - 110,
+                                24, CREAM, 30)
+        back_button = pygame.Rect(530, 420, 220, 45)
+        pygame.draw.rect(self.screen, (78, 49, 30), back_button, border_radius=9)
+        pygame.draw.rect(self.screen, GOLD, back_button, 2, border_radius=9)
+        self._draw_text("BACK TO HOME", back_button.centerx, back_button.y + 11,
+                        size=18, color=CREAM, bold=True, center=True)
+
     def render_home(self, screen, game: TigerCowsGame, camera_frame=None, camera_status: str = "Starting camera...") -> None:
         if pygame is None:
             return
@@ -404,6 +560,7 @@ class GameRenderer:
                         color=(225, 199, 156), center=True)
         self._draw_text("Press Q to quit", right_card.centerx, 566, size=16,
                         color=(225, 199, 156), center=True)
+        self._draw_settings_button((850, 590, 265, 32))
 
     def render(
         self,
@@ -504,3 +661,5 @@ class GameRenderer:
                 pygame.draw.circle(screen, cursor_color, (hand_x, hand_y), 8)
 
         self._draw_text("Mouse clicks work too  |  Esc/H: home  |  Q: quit", 654, 650, size=17, color=CREAM)
+        self._draw_settings_button((988, 603, 240, 36))
+        self._draw_result_animation(game)

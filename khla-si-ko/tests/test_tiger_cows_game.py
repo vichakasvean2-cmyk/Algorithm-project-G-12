@@ -34,6 +34,17 @@ class TigerCowsGameTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             game.set_level("Expert")
 
+    def test_same_position_three_times_results_in_a_draw(self):
+        game = TigerCowsGame()
+
+        game._record_position()
+        self.assertFalse(game.game_over)
+        game._record_position()
+
+        self.assertEqual(game.winner, "Draw")
+        self.assertEqual(game.status, "Draw! The same board position occurred three times.")
+        self.assertIsNone(game.selected_node)
+
     def test_cows_place_then_tigers_move(self):
         game = TigerCowsGame()
 

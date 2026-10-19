@@ -8,6 +8,7 @@ LEVEL_COW_COUNTS = {"Beginner": 6, "Normal": 9, "Hard": COW_COUNT}
 TIGER = "T"
 COW = "C"
 EMPTY = None
+PositionKey = tuple[tuple[str | None, ...], str, int, int]
 
 
 def _neighbors(node: int) -> tuple[int, ...]:
@@ -36,10 +37,12 @@ class TigerCowsGame:
     status: str = "Cows go first: place a cow on a glowing square."
     move_count: int = 0
     last_move: tuple[int, int, str] | None = None
+    position_counts: dict[PositionKey, int] = field(default_factory=dict, init=False, repr=False)
 
     def __post_init__(self) -> None:
         for node in (0, BOARD_SIZE - 1, BOARD_SIZE * (BOARD_SIZE - 1), BOARD_SIZE * BOARD_SIZE - 1):
             self.board[node] = TIGER
+        self._record_position()
 
     @property
     def game_over(self) -> bool:
@@ -70,6 +73,8 @@ class TigerCowsGame:
         self.winner = None
         self.status = "Cows go first: place a cow on a glowing square."
         self.last_move = None
+        self.position_counts.clear()
+        self._record_position()
 
     def legal_targets(self, source: int) -> tuple[int, ...]:
         if not 0 <= source < len(self.board):
@@ -117,6 +122,7 @@ class TigerCowsGame:
 
         self.turn = "tigers"
         self.status = "Tigers' turn: select a tiger, then a green square."
+        self._record_position()
         return True
 
     def _select_or_move(self, node: int) -> bool:
@@ -168,6 +174,7 @@ class TigerCowsGame:
                 self.status = "Tigers win! All cows are trapped."
                 return True
             self.status = "Cows' turn: place a cow." if self.cows_remaining else "Cows' turn: select a cow to move."
+            self._record_position()
             return True
 
         if not self._has_legal_tiger_move():
@@ -176,7 +183,22 @@ class TigerCowsGame:
             return True
         self.turn = "tigers"
         self.status = "Tigers' turn: select a tiger, then a green square."
+        self._record_position()
         return True
+
+    def _record_position(self) -> None:
+        position: PositionKey = (
+            tuple(self.board),
+            self.turn,
+            self.cows_placed,
+            self.cows_captured,
+        )
+        occurrences = self.position_counts.get(position, 0) + 1
+        self.position_counts[position] = occurrences
+        if occurrences >= 3:
+            self.winner = "Draw"
+            self.selected_node = None
+            self.status = "Draw! The same board position occurred three times."
 
     def _has_legal_tiger_move(self) -> bool:
         return any(self.board[node] == TIGER and self.legal_targets(node) for node in range(len(self.board)))

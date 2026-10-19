@@ -24,8 +24,11 @@ python main.py
 - Once all cows for the selected level are placed, cows move one square horizontally or vertically to an empty square on their turns.
 - Cows win by trapping all four tigers so they have no legal move.
 - Tigers win by capturing all cows for the selected level, or by trapping all cows so none can move.
+- A draw occurs if the same board position, turn, and cow counts occur three times.
 
-The webcam opens automatically at 640×480. On first use, the game may download the MediaPipe face model needed for smile-to-start. Hold a clear smile toward the camera briefly to start the selected level. During the game, point your index finger at a glowing board square and pinch your thumb and index finger together to click. For a tiger move, pinch once on a tiger and again on a green highlighted destination. Pinch the selected tiger again to cancel. Both players use the same camera, taking turns in front of it. Mouse clicks also work as a backup. Press `R` to restart the current level, `Esc`/`H` to return home, or `Q` to quit.
+The webcam opens automatically at 640×480. On first use, the game may download the MediaPipe face model needed for smile-to-start. Hold a clear smile toward the camera briefly to start the selected level. Camera pointing and pinching can also select buttons throughout the home screen, game, settings, and result screen. During the game, point at a glowing board square and pinch to click. For a tiger move, pinch once on a tiger and again on a green highlighted destination. Pinch the selected tiger again to cancel. Both players use the same camera, taking turns in front of it. Mouse clicks also work as a backup. Press `R` to restart the current level, `Esc`/`H` to return home, or `Q` to quit.
+
+Open **Settings** from the home screen or game screen, or press `S`, to enable/disable audio, the three-second countdown sound, and gesture confirmation sounds independently. Round endings play distinct win, lose, or draw sounds and show a brief pulsing result animation. Audio settings apply for the current run of the game.
 
 ## Tests
 
