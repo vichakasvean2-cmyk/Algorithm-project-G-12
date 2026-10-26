@@ -5,7 +5,7 @@ from array import array
 
 try:
     import pygame
-except ImportError:  # pragma: no cover
+except ImportError: 
     pygame = None
 
 

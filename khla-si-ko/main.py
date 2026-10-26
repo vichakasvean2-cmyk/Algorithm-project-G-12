@@ -13,7 +13,7 @@ from src.tiger_cows_game import TigerCowsGame
 
 try:
     import pygame
-except ImportError:  # pragma: no cover - runtime dependency check
+except ImportError:  
     pygame = None
 
 COUNTDOWN_SECONDS = 2
@@ -59,7 +59,7 @@ def main() -> None:
         sys.exit(1)
 
     pygame.init()
-    pygame.display.set_caption("Tigers and Cows")
+    pygame.display.set_caption("Kla Si Ko")
     screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
     clock = pygame.time.Clock()
     renderer = GameRenderer(screen)
@@ -67,6 +67,7 @@ def main() -> None:
     camera = CameraControl()
     audio = AudioManager()
     previous_pinching = False
+    previous_hand_side: str | None = None
     in_game = False
     settings_open = False
     countdown_started_at: float | None = None
@@ -132,16 +133,10 @@ def main() -> None:
         elif renderer.settings_button_at(screen_position):
             settings_open = True
         elif not in_game:
-            level = renderer.home_level_at(screen_position)
-            if level is not None:
-                game.set_level(level)
-            elif renderer.home_start_at(screen_position):
+            if renderer.home_start_at(screen_position):
                 request_start()
         else:
-            level = renderer.level_at(screen_position)
-            if level is not None:
-                game.set_level(level)
-            elif game.winner is None and not renderer.is_animating(game):
+            if game.winner is None and not renderer.is_animating(game):
                 node = renderer.board_node_at(board_position)
                 if node is not None:
                     apply_node(node, gesture=True)
@@ -172,12 +167,6 @@ def main() -> None:
                             request_start()
                     elif event.key == pygame.K_r:
                         game.reset()
-                    elif event.key == pygame.K_1:
-                        game.set_level("Beginner")
-                    elif event.key == pygame.K_2:
-                        game.set_level("Normal")
-                    elif event.key == pygame.K_3:
-                        game.set_level("Hard")
                 elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     if settings_open:
                         option = renderer.settings_option_at(event.pos)
@@ -195,19 +184,12 @@ def main() -> None:
                     elif renderer.settings_button_at(event.pos):
                         settings_open = True
                     elif not in_game:
-                        level = renderer.home_level_at(event.pos)
-                        if level is not None:
-                            game.set_level(level)
-                        elif renderer.home_start_at(event.pos):
+                        if renderer.home_start_at(event.pos):
                             request_start()
                     else:
-                        level = renderer.level_at(event.pos)
-                        if level is not None:
-                            game.set_level(level)
-                        else:
-                            node = renderer.board_node_at(event.pos)
-                            if node is not None and not renderer.is_animating(game):
-                                apply_node(node)
+                        node = renderer.board_node_at(event.pos)
+                        if node is not None and not renderer.is_animating(game):
+                            apply_node(node)
 
             smile_triggered = camera.consume_smile_trigger()
             if not in_game and not settings_open and countdown_started_at is None and smile_triggered:
@@ -218,6 +200,7 @@ def main() -> None:
                 if camera_point is not None
                 else None
             )
+            hand_side = camera.get_hand_side()
             camera_ui_target = (
                 camera_screen_position is not None
                 and renderer.camera_ui_target_at(
@@ -239,10 +222,19 @@ def main() -> None:
                         audio.play("countdown")
                         last_countdown_number = countdown_value
 
-            if camera_screen_position is not None and pinching and not previous_pinching:
+            if camera_screen_position is not None and pinching and (
+                not previous_pinching or hand_side != previous_hand_side
+            ):
                 board_position = renderer.camera_point_to_board(camera_point)
-                handle_camera_click(camera_screen_position, board_position)
+                if (
+                    not in_game
+                    or camera_ui_target
+                    or (game.turn == "tigers" and hand_side == "Left")
+                    or (game.turn == "cows" and hand_side == "Right")
+                ):
+                    handle_camera_click(camera_screen_position, board_position)
             previous_pinching = pinching
+            previous_hand_side = hand_side
 
             if not camera_ready:
                 camera_status = camera_status or "Starting camera..."

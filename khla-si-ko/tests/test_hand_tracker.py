@@ -62,7 +62,10 @@ class HandTrackerTests(unittest.TestCase):
         landmarks[4] = SimpleNamespace(x=0.42, y=0.51)
 
         landmarker = Mock()
-        landmarker.detect.return_value = SimpleNamespace(hand_landmarks=[landmarks])
+        landmarker.detect.return_value = SimpleNamespace(
+            hand_landmarks=[landmarks],
+            handedness=[[SimpleNamespace(category_name="Right")]],
+        )
         cv2 = SimpleNamespace(COLOR_BGR2RGB=1, cvtColor=Mock(return_value=rgb))
         mp = SimpleNamespace(
             Image=Mock(return_value=image),
@@ -77,7 +80,7 @@ class HandTrackerTests(unittest.TestCase):
             patch.object(hand_tracker_module, "cv2", cv2),
             patch.object(hand_tracker_module, "mp", mp),
         ):
-            self.assertEqual(tracker.detect(frame), ((0.4, 0.5), True))
+            self.assertEqual(tracker.detect(frame), ((0.4, 0.5), True, "Left"))
 
         cv2.cvtColor.assert_called_once_with(frame, cv2.COLOR_BGR2RGB)
         landmarker.detect.assert_called_once_with(image)
@@ -87,7 +90,10 @@ class HandTrackerTests(unittest.TestCase):
         landmarks[8] = SimpleNamespace(x=0.4, y=0.5)
         landmarks[4] = SimpleNamespace(x=0.6, y=0.7)
         landmarker = Mock()
-        landmarker.detect.return_value = SimpleNamespace(hand_landmarks=[landmarks])
+        landmarker.detect.return_value = SimpleNamespace(
+            hand_landmarks=[landmarks],
+            handedness=[[SimpleNamespace(category_name="Left")]],
+        )
         tracker = HandTracker.__new__(HandTracker)
         tracker.landmarker = landmarker
         tracker._pinching = False
@@ -99,7 +105,7 @@ class HandTrackerTests(unittest.TestCase):
                 ImageFormat=SimpleNamespace(SRGB=2),
             )),
         ):
-            self.assertEqual(tracker.detect(object()), ((0.4, 0.5), False))
+            self.assertEqual(tracker.detect(object()), ((0.4, 0.5), False, "Right"))
 
     def test_pinch_hysteresis_prevents_flickering_at_threshold(self):
         distances = iter((0.04, 0.06, 0.08))
@@ -108,9 +114,9 @@ class HandTrackerTests(unittest.TestCase):
         landmarks[4] = SimpleNamespace(x=0.4, y=0.5)
         landmarker = Mock()
         landmarker.detect.side_effect = [
-            SimpleNamespace(hand_landmarks=[landmarks]),
-            SimpleNamespace(hand_landmarks=[landmarks]),
-            SimpleNamespace(hand_landmarks=[landmarks]),
+            SimpleNamespace(hand_landmarks=[landmarks], handedness=[[SimpleNamespace(category_name="Left")]]),
+            SimpleNamespace(hand_landmarks=[landmarks], handedness=[[SimpleNamespace(category_name="Left")]]),
+            SimpleNamespace(hand_landmarks=[landmarks], handedness=[[SimpleNamespace(category_name="Left")]]),
         ]
         tracker = HandTracker.__new__(HandTracker)
         tracker.landmarker = landmarker
@@ -128,7 +134,8 @@ class HandTrackerTests(unittest.TestCase):
             states = []
             for distance in distances:
                 landmarks[4] = SimpleNamespace(x=landmarks[8].x + distance, y=landmarks[8].y)
-                states.append(tracker.detect(object())[1])
+                detected = tracker.detect(object())
+                states.append(detected[1])
 
         self.assertEqual(states, [True, True, False])
 

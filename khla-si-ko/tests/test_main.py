@@ -32,19 +32,9 @@ class MainTests(unittest.TestCase):
         self.assertEqual(GameRenderer.board_node_at((200, 296)), 5)
         self.assertIsNone(GameRenderer.board_node_at((600, 700)))
 
-    def test_level_buttons_map_to_difficulty_levels(self):
-        self.assertEqual(GameRenderer.level_at((700, 240)), "Beginner")
-        self.assertEqual(GameRenderer.level_at((900, 240)), "Normal")
-        self.assertEqual(GameRenderer.level_at((1100, 240)), "Hard")
-        self.assertIsNone(GameRenderer.level_at((700, 280)))
-
-    def test_home_buttons_map_to_levels_and_start(self):
-        self.assertEqual(GameRenderer.home_level_at((200, 360)), "Beginner")
-        self.assertEqual(GameRenderer.home_level_at((400, 360)), "Normal")
-        self.assertEqual(GameRenderer.home_level_at((600, 360)), "Hard")
-        self.assertIsNone(GameRenderer.home_level_at((200, 420)))
-        self.assertTrue(GameRenderer.home_start_at((400, 500)))
-        self.assertFalse(GameRenderer.home_start_at((400, 560)))
+    def test_home_start_button_has_no_level_selection(self):
+        self.assertTrue(GameRenderer.home_start_at((400, 400)))
+        self.assertFalse(GameRenderer.home_start_at((400, 500)))
 
     def test_settings_buttons_map_to_their_options(self):
         self.assertTrue(GameRenderer.settings_button_at((900, 600)))
@@ -58,10 +48,11 @@ class MainTests(unittest.TestCase):
         self.assertTrue(GameRenderer.result_back_at((640, 440)))
         self.assertFalse(GameRenderer.result_back_at((640, 500)))
 
-    def test_camera_ui_target_detects_home_settings_game_level_and_result_controls(self):
-        self.assertTrue(GameRenderer.camera_ui_target_at((200, 360), False, False, False))
+    def test_camera_ui_target_detects_home_settings_game_and_result_controls(self):
+        self.assertFalse(GameRenderer.camera_ui_target_at((200, 360), False, False, False))
+        self.assertTrue(GameRenderer.camera_ui_target_at((400, 400), False, False, False))
         self.assertTrue(GameRenderer.camera_ui_target_at((900, 600), False, False, False))
-        self.assertTrue(GameRenderer.camera_ui_target_at((1100, 240), True, False, False))
+        self.assertFalse(GameRenderer.camera_ui_target_at((1100, 240), True, False, False))
         self.assertTrue(GameRenderer.camera_ui_target_at((640, 440), True, False, True))
         self.assertTrue(GameRenderer.camera_ui_target_at((780, 300), True, True, False))
         self.assertFalse(GameRenderer.camera_ui_target_at((640, 440), True, False, False))
@@ -86,10 +77,9 @@ class MainTests(unittest.TestCase):
         self.pygame.time.Clock.return_value = Mock()
         self.game = Mock()
         self.game.winner = None
+        self.game.turn = "cows"
         self.renderer = Mock()
         self.renderer.board_node_at.return_value = 5
-        self.renderer.level_at.return_value = None
-        self.renderer.home_level_at.return_value = None
         self.renderer.home_start_at.return_value = False
         self.renderer.settings_button_at.return_value = False
         self.renderer.settings_option_at.return_value = None
@@ -99,6 +89,7 @@ class MainTests(unittest.TestCase):
         self.renderer.is_animating.return_value = False
         self.camera = Mock()
         self.camera.get_state.return_value = (None, None, False, "Trying camera 0 (Media Foundation)...", False)
+        self.camera.get_hand_side.return_value = "Right"
         self.camera.consume_smile_trigger.return_value = False
         self.audio = Mock()
         self.audio.enabled = True
@@ -157,7 +148,7 @@ class MainTests(unittest.TestCase):
 
         self.game.reset.assert_called_once_with()
 
-    def test_level_shortcut_changes_difficulty(self):
+    def test_number_shortcut_does_not_change_fixed_game(self):
         self.pygame.event.get.side_effect = [
             [SimpleNamespace(type=self.pygame.KEYDOWN, key=self.pygame.K_1)],
             [SimpleNamespace(type=self.pygame.QUIT)],
@@ -165,21 +156,19 @@ class MainTests(unittest.TestCase):
 
         main.main()
 
-        self.game.set_level.assert_called_once_with("Beginner")
+        self.game.reset.assert_not_called()
 
-    def test_level_button_changes_difficulty_without_placing_a_piece(self):
+    def test_removed_level_control_does_not_change_game(self):
         self.pygame.event.get.side_effect = [
             [SimpleNamespace(type=self.pygame.MOUSEBUTTONDOWN, button=1, pos=(700, 240))],
             [SimpleNamespace(type=self.pygame.QUIT)],
         ]
-        self.renderer.home_level_at.return_value = "Beginner"
-
         main.main()
 
-        self.game.set_level.assert_called_once_with("Beginner")
+        self.game.reset.assert_not_called()
         self.game.click_node.assert_not_called()
 
-    def test_smile_starts_the_selected_level(self):
+    def test_smile_starts_the_game(self):
         self.pygame.event.get.side_effect = [[], [SimpleNamespace(type=self.pygame.QUIT)]]
         self.camera.consume_smile_trigger.side_effect = [True, False]
         with patch.object(main, "play_startup_sound") as play_sound:
@@ -206,7 +195,7 @@ class MainTests(unittest.TestCase):
 
     def test_start_button_enters_game(self):
         self.pygame.event.get.side_effect = [
-            [SimpleNamespace(type=self.pygame.MOUSEBUTTONDOWN, button=1, pos=(400, 500))],
+            [SimpleNamespace(type=self.pygame.MOUSEBUTTONDOWN, button=1, pos=(400, 400))],
             [SimpleNamespace(type=self.pygame.QUIT)],
         ]
         self.renderer.home_start_at.return_value = True
@@ -240,6 +229,40 @@ class MainTests(unittest.TestCase):
         self.game.click_node.assert_called_once_with(5)
         self.audio.play.assert_called_once_with("gesture")
         self.camera.close.assert_called_once_with()
+
+    def _test_camera_hand_controls_turn(self, turn, hand_side, should_move):
+        self.game.turn = turn
+        self.camera.get_hand_side.return_value = hand_side
+        self.pygame.event.get.side_effect = [
+            [SimpleNamespace(type=self.pygame.MOUSEBUTTONDOWN, button=1, pos=(400, 400))],
+            [],
+            [SimpleNamespace(type=self.pygame.QUIT)],
+        ]
+        self.renderer.home_start_at.return_value = True
+        self.camera.get_state.side_effect = [
+            (None, None, False, "Show your hand", True),
+            (None, (0.5, 0.5), True, "Show your hand", True),
+            (None, None, False, "Show your hand", True),
+        ]
+
+        main.main()
+
+        if should_move:
+            self.game.click_node.assert_called_once_with(5)
+        else:
+            self.game.click_node.assert_not_called()
+
+    def test_left_hand_controls_tiger_turn(self):
+        self._test_camera_hand_controls_turn("tigers", "Left", True)
+
+    def test_right_hand_cannot_control_tiger_turn(self):
+        self._test_camera_hand_controls_turn("tigers", "Right", False)
+
+    def test_left_hand_cannot_control_cow_turn(self):
+        self._test_camera_hand_controls_turn("cows", "Left", False)
+
+    def test_right_hand_controls_cow_turn(self):
+        self._test_camera_hand_controls_turn("cows", "Right", True)
 
     def test_settings_overlay_toggles_audio_options(self):
         self.pygame.event.get.side_effect = [
@@ -346,28 +369,23 @@ class MainTests(unittest.TestCase):
         self.camera.set_smile_detection_enabled.assert_any_call(True)
         self.assertEqual(self.renderer.render_home.call_count, 2)
 
-    def test_camera_pinch_can_select_home_level_and_start_game(self):
-        self.pygame.event.get.side_effect = [[], [], [], [SimpleNamespace(type=self.pygame.QUIT)]]
+    def test_camera_pinch_starts_game_without_level_selection(self):
+        self.pygame.event.get.side_effect = [[], [], [SimpleNamespace(type=self.pygame.QUIT)]]
         self.camera.get_state.side_effect = [
             (None, (0.5, 0.5), True, "Show your hand", True),
             (None, (0.5, 0.5), False, "Show your hand", True),
-            (None, (0.5, 0.5), True, "Show your hand", True),
-            (None, (0.5, 0.5), False, "Show your hand", True),
+            (None, None, False, "Show your hand", True),
         ]
-        self.renderer.camera_point_to_screen.side_effect = [
-            (200, 360), (200, 360), (400, 500), (400, 500),
-        ]
-        self.renderer.home_level_at.side_effect = GameRenderer.home_level_at
+        self.renderer.camera_point_to_screen.side_effect = [(400, 400), (400, 400)]
         self.renderer.home_start_at.side_effect = GameRenderer.home_start_at
         self.renderer.settings_button_at.side_effect = GameRenderer.settings_button_at
 
         main.main()
 
-        self.game.set_level.assert_called_once_with("Beginner")
         self.game.reset.assert_called_once_with()
         self.camera.set_smile_detection_enabled.assert_called_once_with(False)
 
-    def test_camera_pinch_can_change_level_during_game(self):
+    def test_camera_pinch_uses_board_input_instead_of_difficulty_selection(self):
         self.pygame.event.get.side_effect = [
             [SimpleNamespace(type=self.pygame.MOUSEBUTTONDOWN, button=1, pos=(400, 500))],
             [],
@@ -378,7 +396,6 @@ class MainTests(unittest.TestCase):
         self.renderer.camera_point_to_screen.side_effect = [
             (1100, 240), (1100, 240), (1100, 240),
         ]
-        self.renderer.level_at.side_effect = GameRenderer.level_at
         self.renderer.settings_button_at.side_effect = GameRenderer.settings_button_at
         self.camera.get_state.side_effect = [
             (None, None, False, "Show your hand", True),
@@ -389,7 +406,7 @@ class MainTests(unittest.TestCase):
 
         main.main()
 
-        self.game.set_level.assert_called_once_with("Hard")
+        self.game.click_node.assert_called_once_with(5)
 
     def test_camera_pinch_can_open_settings_and_toggle_audio(self):
         self.pygame.event.get.side_effect = [[], [], [], [], [SimpleNamespace(type=self.pygame.QUIT)]]

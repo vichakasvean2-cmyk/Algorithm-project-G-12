@@ -5,10 +5,10 @@ import time
 
 try:
     import pygame
-except ImportError:  # pragma: no cover - handled at runtime
+except ImportError:  
     pygame = None
 
-from src.tiger_cows_game import BOARD_SIZE, COW, LEVEL_COW_COUNTS, TIGER, TigerCowsGame
+from src.tiger_cows_game import BOARD_SIZE, COW, COW_COUNT, TIGER, TigerCowsGame
 
 BOARD_LEFT = 72
 BOARD_TOP = 168
@@ -80,29 +80,10 @@ class GameRenderer:
         return row * BOARD_SIZE + column
 
     @staticmethod
-    def level_at(position: tuple[int, int]) -> str | None:
-        x, y = position
-        if not 220 <= y <= 259:
-            return None
-        for level, left in (("Beginner", 654), ("Normal", 839), ("Hard", 1024)):
-            if left <= x <= left + 176:
-                return level
-        return None
-
-    @staticmethod
-    def home_level_at(position: tuple[int, int]) -> str | None:
-        x, y = position
-        if not 334 <= y <= 402:
-            return None
-        for level, left in (("Beginner", 135), ("Normal", 350), ("Hard", 565)):
-            if left <= x <= left + 195:
-                return level
-        return None
-
     @staticmethod
     def home_start_at(position: tuple[int, int]) -> bool:
         x, y = position
-        return 250 <= x <= 690 and 455 <= y <= 545
+        return 250 <= x <= 690 and 360 <= y <= 450
 
     @staticmethod
     def settings_button_at(position: tuple[int, int]) -> bool:
@@ -162,11 +143,9 @@ class GameRenderer:
             return (
                 GameRenderer.settings_button_at(position)
                 or (game_over and GameRenderer.result_back_at(position))
-                or (not game_over and GameRenderer.level_at(position) is not None)
             )
         return (
             GameRenderer.settings_button_at(position)
-            or GameRenderer.home_level_at(position) is not None
             or GameRenderer.home_start_at(position)
         )
 
@@ -500,30 +479,18 @@ class GameRenderer:
         pygame.draw.rect(screen, (50, 29, 18), title_rect.inflate(4, 4), border_radius=9)
         pygame.draw.rect(screen, WOOD_LIGHT, title_rect, border_radius=7)
         pygame.draw.rect(screen, WOOD_DARK, title_rect.inflate(-7, -7), 2, border_radius=5)
-        self._draw_text("TIGERS & COWS", title_rect.centerx, title_rect.y + 7, size=43,
+        self._draw_text("KLA SI KO", title_rect.centerx, title_rect.y + 7, size=43,
                         color=(75, 45, 25), bold=True, center=True, serif=True)
-        self._draw_text("TIGERS & COWS", title_rect.centerx, title_rect.y + 4, size=43,
+        self._draw_text("KLA SI KO", title_rect.centerx, title_rect.y + 4, size=43,
                         color=CREAM, bold=True, center=True, serif=True)
 
         self._draw_panel(pygame.Rect(55, 98, screen.get_width() - 110, 586), fill=(117, 75, 40))
         self._draw_text("WELCOME, PLAYER!", 148, 143, size=24, color=GOLD, bold=True)
         self._draw_text("Ready for a challenge?", 148, 188, size=39, color=CREAM, bold=True, serif=True)
-        self._draw_text("Choose a difficulty, then smile to begin.", 150, 244, size=22, color=(249, 228, 190))
+        self._draw_text("Trap the tigers or capture all 12 cows.", 150, 244, size=22, color=(249, 228, 190))
         self._draw_text("You can also press SPACE or click the button.", 150, 278, size=19, color=(225, 199, 156))
 
-        self._draw_text("CHOOSE YOUR LEVEL", 150, 315, size=20, color=CREAM, bold=True)
-        for level, left in (("Beginner", 135), ("Normal", 350), ("Hard", 565)):
-            button = pygame.Rect(left, 334, 195, 68)
-            selected = game.level == level
-            fill = (222, 170, 76) if selected else (78, 49, 30)
-            pygame.draw.rect(self.screen, fill, button, border_radius=13)
-            pygame.draw.rect(self.screen, GOLD, button, 3 if selected else 2, border_radius=13)
-            self._draw_text(level.upper(), button.centerx, button.y + 10, size=21,
-                            color=TEXT_DARK if selected else CREAM, bold=True, center=True)
-            self._draw_text(f"{LEVEL_COW_COUNTS[level]} cows", button.centerx, button.y + 39, size=17,
-                            color=TEXT_DARK if selected else (239, 211, 166), center=True)
-
-        start_button = pygame.Rect(250, 455, 440, 90)
+        start_button = pygame.Rect(250, 360, 440, 90)
         pygame.draw.rect(self.screen, (55, 32, 20), start_button.inflate(6, 6), border_radius=20)
         pygame.draw.rect(self.screen, (226, 174, 76), start_button, border_radius=17)
         pygame.draw.rect(self.screen, (255, 226, 148), start_button.inflate(-8, -8), 2, border_radius=13)
@@ -535,7 +502,7 @@ class GameRenderer:
         right_card = pygame.Rect(790, 136, 385, 496)
         self._draw_panel(right_card, fill=(96, 57, 31))
         self._draw_text("YOUR GAME", right_card.centerx, 158, size=23, color=GOLD, bold=True, center=True)
-        self._draw_text(f"{game.level.upper()}  ·  {game.cow_limit} COWS", right_card.centerx, 194,
+        self._draw_text(f"{COW_COUNT} COWS  ·  4 TIGERS", right_card.centerx, 194,
                         size=19, color=CREAM, bold=True, center=True)
 
         preview_rect = pygame.Rect(850, 236, 265, 185)
@@ -556,7 +523,7 @@ class GameRenderer:
                         size=17, bold=True, center=True)
         self._draw_text("Smile and hold for a moment", right_card.centerx, 460, size=18,
                         color=(249, 228, 190), center=True)
-        self._draw_text("Mouse and keyboard controls work too.", right_card.centerx, 493, size=16,
+        self._draw_text("Left hand: tigers. Right hand: cows.", right_card.centerx, 493, size=16,
                         color=(225, 199, 156), center=True)
         self._draw_text("Press Q to quit", right_card.centerx, 566, size=16,
                         color=(225, 199, 156), center=True)
@@ -580,9 +547,9 @@ class GameRenderer:
         pygame.draw.rect(screen, (50, 29, 18), title_rect.inflate(4, 4), border_radius=9)
         pygame.draw.rect(screen, WOOD_LIGHT, title_rect, border_radius=7)
         pygame.draw.rect(screen, WOOD_DARK, title_rect.inflate(-7, -7), 2, border_radius=5)
-        self._draw_text("TIGERS & COWS", title_rect.centerx, title_rect.y + 7, size=43,
+        self._draw_text("KLA SI KO", title_rect.centerx, title_rect.y + 7, size=43,
                         color=(75, 45, 25), bold=True, center=True, serif=True)
-        self._draw_text("TIGERS & COWS", title_rect.centerx, title_rect.y + 4, size=43,
+        self._draw_text("KLA SI KO", title_rect.centerx, title_rect.y + 4, size=43,
                         color=CREAM, bold=True, center=True, serif=True)
 
         self._draw_panel(pygame.Rect(54, 88, 552, 48), fill=(169, 111, 48))
@@ -613,38 +580,18 @@ class GameRenderer:
             self._draw_text(heading, x + 17, 118, size=23, color=accent, bold=True)
             self._draw_text(detail, x + 17, 151, size=16, color=CREAM)
 
-        self._draw_text("DIFFICULTY  (press 1, 2, or 3)", 654, 193, size=19, color=CREAM, bold=True)
-        for level, left in (("Beginner", 654), ("Normal", 839), ("Hard", 1024)):
-            button = pygame.Rect(left, 220, 176, 39)
-            selected_level = game.level == level
-            pygame.draw.rect(
-                self.screen,
-                (210, 153, 65) if selected_level else (78, 49, 30),
-                button,
-                border_radius=9,
-            )
-            pygame.draw.rect(self.screen, GOLD, button, 2, border_radius=9)
-            self._draw_text(
-                f"{level} ({LEVEL_COW_COUNTS[level]})",
-                button.centerx,
-                button.y + 9,
-                size=17,
-                color=TEXT_DARK if selected_level else CREAM,
-                bold=True,
-                center=True,
-            )
-
-        self._draw_text("HOW TO PLAY", 654, 277, size=27, color=CREAM, bold=True)
+        self._draw_text("HOW TO PLAY", 654, 203, size=27, color=CREAM, bold=True)
         instructions = (
             "Cows: click any glowing empty square.",
             "Tigers: click a tiger, then a green square.",
             "Click the selected tiger again to cancel.",
-            "Mouse: click. Camera: point and pinch.",
+            "Camera: left hand tigers; right hand cows.",
+            "Mouse: click any move.",
             "Cows trap; tigers capture by jumping.",
             "R: restart     Esc/H: home",
         )
         for index, instruction in enumerate(instructions):
-            self._draw_text(instruction, 654, 315 + index * 29, size=17, color=(249, 228, 190))
+            self._draw_text(instruction, 654, 241 + index * 29, size=17, color=(249, 228, 190))
 
         turn_label = "GAME OVER" if game.game_over else f"{game.turn.upper()}' TURN"
         turn_color = (255, 219, 92) if not game.game_over else (139, 235, 136)

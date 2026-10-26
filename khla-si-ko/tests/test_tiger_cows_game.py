@@ -1,6 +1,6 @@
 import unittest
 
-from src.tiger_cows_game import COW, TIGER, TigerCowsGame
+from src.tiger_cows_game import COW, COW_COUNT, TIGER, TigerCowsGame
 
 
 class TigerCowsGameTests(unittest.TestCase):
@@ -9,30 +9,16 @@ class TigerCowsGameTests(unittest.TestCase):
 
         self.assertEqual([index for index, piece in enumerate(game.board) if piece == TIGER], [0, 3, 12, 15])
         self.assertEqual(game.turn, "cows")
-        self.assertEqual(game.cows_remaining, 9)
+        self.assertEqual(game.cows_remaining, COW_COUNT)
 
-    def test_difficulty_levels_set_cow_count_and_restart_the_game(self):
+    def test_game_uses_fixed_cow_count_after_reset(self):
         game = TigerCowsGame()
         game.click_node(5)
-
-        game.set_level("Beginner")
-
-        self.assertEqual(game.level, "Beginner")
-        self.assertEqual(game.cows_remaining, 6)
+        game.reset()
+        self.assertEqual(game.cows_remaining, COW_COUNT)
         self.assertEqual(game.cows_placed, 0)
         self.assertEqual(game.turn, "cows")
         self.assertEqual([index for index, piece in enumerate(game.board) if piece == TIGER], [0, 3, 12, 15])
-
-        game.set_level("Normal")
-        self.assertEqual(game.cows_remaining, 9)
-        game.set_level("Hard")
-        self.assertEqual(game.cows_remaining, 12)
-
-    def test_unknown_difficulty_level_is_rejected(self):
-        game = TigerCowsGame()
-
-        with self.assertRaises(ValueError):
-            game.set_level("Expert")
 
     def test_same_position_three_times_results_in_a_draw(self):
         game = TigerCowsGame()
@@ -107,8 +93,7 @@ class TigerCowsGameTests(unittest.TestCase):
 
     def test_cows_win_when_their_last_placement_traps_every_tiger(self):
         game = TigerCowsGame()
-        game.set_level("Hard")
-        game.cows_placed = 11
+        game.cows_placed = COW_COUNT - 1
         game.board = [
             TIGER, None, COW, TIGER,
             COW, COW, COW, COW,
@@ -122,10 +107,9 @@ class TigerCowsGameTests(unittest.TestCase):
 
     def test_tigers_win_after_capturing_the_twelfth_cow(self):
         game = TigerCowsGame()
-        game.set_level("Hard")
         game.turn = "tigers"
-        game.cows_placed = 12
-        game.cows_captured = 11
+        game.cows_placed = COW_COUNT
+        game.cows_captured = COW_COUNT - 1
         game.board[0] = TIGER
         game.board[1] = COW
         game.board[2] = None
@@ -135,12 +119,11 @@ class TigerCowsGameTests(unittest.TestCase):
         self.assertEqual(game.winner, "Tigers")
         self.assertEqual(game.cows_captured, 12)
 
-    def test_tigers_win_after_capturing_all_cows_for_the_selected_level(self):
+    def test_tigers_win_after_capturing_all_cows(self):
         game = TigerCowsGame()
-        game.set_level("Beginner")
         game.turn = "tigers"
-        game.cows_placed = 6
-        game.cows_captured = 5
+        game.cows_placed = COW_COUNT
+        game.cows_captured = COW_COUNT - 1
         game.board[0] = TIGER
         game.board[1] = COW
         game.board[2] = None
@@ -149,7 +132,7 @@ class TigerCowsGameTests(unittest.TestCase):
         self.assertTrue(game.click_node(2))
 
         self.assertEqual(game.winner, "Tigers")
-        self.assertEqual(game.cows_captured, 6)
+        self.assertEqual(game.cows_captured, COW_COUNT)
 
     def test_reset_restores_initial_board(self):
         game = TigerCowsGame()
@@ -158,7 +141,7 @@ class TigerCowsGameTests(unittest.TestCase):
         game.reset()
 
         self.assertEqual([index for index, piece in enumerate(game.board) if piece == TIGER], [0, 3, 12, 15])
-        self.assertEqual(game.cows_remaining, 9)
+        self.assertEqual(game.cows_remaining, COW_COUNT)
         self.assertEqual(game.turn, "cows")
         self.assertFalse(game.game_over)
         self.assertIsNone(game.last_move)

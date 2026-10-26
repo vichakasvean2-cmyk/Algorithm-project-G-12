@@ -16,6 +16,7 @@ class CameraControl:
         self._frame = None
         self._point = None
         self._pinching = False
+        self._hand_side = None
         self._smile_triggered = False
         self._smile_detection_enabled = True
         self._status = "Starting camera..."
@@ -57,6 +58,7 @@ class CameraControl:
             next_detection = 0.0
             point = None
             pinching = False
+            hand_side = None
             while not self._stop_event.is_set():
                 frame = camera.read_frame()
                 if frame is None:
@@ -69,7 +71,7 @@ class CameraControl:
                 now = time.monotonic()
                 if (tracker.available or tracker.face_landmarker is not None) and now >= next_detection:
                     detected = tracker.detect(frame)
-                    point, pinching = detected if detected is not None else (None, False)
+                    point, pinching, hand_side = detected if detected is not None else (None, False, None)
                     with self._lock:
                         smile_detection_enabled = self._smile_detection_enabled
                     if (
@@ -80,7 +82,13 @@ class CameraControl:
                         with self._lock:
                             self._smile_triggered = True
                     next_detection = now + detection_interval
-                self._publish(frame=frame, point=point, pinching=pinching, ready=True)
+                self._publish(
+                    frame=frame,
+                    point=point,
+                    pinching=pinching,
+                    hand_side=hand_side,
+                    ready=True,
+                )
         except Exception as exc:
             self._publish(status=f"Camera error: {exc}", ready=True)
         finally:
@@ -91,12 +99,21 @@ class CameraControl:
                 self._camera.release()
                 self._camera = None
 
-    def _publish(self, frame=None, point=None, pinching=False, status=None, ready=None) -> None:
+    def _publish(
+        self,
+        frame=None,
+        point=None,
+        pinching=False,
+        hand_side=None,
+        status=None,
+        ready=None,
+    ) -> None:
         with self._lock:
             if frame is not None:
                 self._frame = frame
             self._point = point
             self._pinching = pinching
+            self._hand_side = hand_side
             if status is not None:
                 self._status = status
             if ready is not None:
@@ -105,6 +122,10 @@ class CameraControl:
     def get_state(self):
         with self._lock:
             return self._frame, self._point, self._pinching, self._status, self._ready
+
+    def get_hand_side(self) -> str | None:
+        with self._lock:
+            return self._hand_side
 
     def consume_smile_trigger(self) -> bool:
         with self._lock:

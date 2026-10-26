@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 
 BOARD_SIZE = 4
 COW_COUNT = 12
-LEVEL_COW_COUNTS = {"Beginner": 6, "Normal": 9, "Hard": COW_COUNT}
 TIGER = "T"
 COW = "C"
 EMPTY = None
@@ -28,7 +27,6 @@ def _neighbors(node: int) -> tuple[int, ...]:
 @dataclass
 class TigerCowsGame:
     board: list[str | None] = field(default_factory=lambda: [EMPTY] * (BOARD_SIZE * BOARD_SIZE))
-    level: str = "Normal"
     turn: str = "cows"
     cows_placed: int = 0
     cows_captured: int = 0
@@ -50,17 +48,7 @@ class TigerCowsGame:
 
     @property
     def cows_remaining(self) -> int:
-        return self.cow_limit - self.cows_placed
-
-    @property
-    def cow_limit(self) -> int:
-        return LEVEL_COW_COUNTS[self.level]
-
-    def set_level(self, level: str) -> None:
-        if level not in LEVEL_COW_COUNTS:
-            raise ValueError(f"Unknown difficulty level: {level}")
-        self.level = level
-        self.reset()
+        return COW_COUNT - self.cows_placed
 
     def reset(self) -> None:
         self.board = [EMPTY] * (BOARD_SIZE * BOARD_SIZE)
@@ -164,9 +152,9 @@ class TigerCowsGame:
         self.selected_node = None
 
         if piece == TIGER:
-            if self.cows_captured >= self.cow_limit:
+            if self.cows_captured >= COW_COUNT:
                 self.winner = "Tigers"
-                self.status = f"Tigers win! They captured all {self.cow_limit} cows."
+                self.status = f"Tigers win! They captured all {COW_COUNT} cows."
                 return True
             self.turn = "cows"
             if self.cows_remaining == 0 and not self._has_legal_cow_move():

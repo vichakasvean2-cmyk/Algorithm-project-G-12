@@ -5,7 +5,7 @@ from collections.abc import Callable
 
 try:
     import cv2
-except ImportError:  # pragma: no cover - optional camera support
+except ImportError:  
     cv2 = None
 
 

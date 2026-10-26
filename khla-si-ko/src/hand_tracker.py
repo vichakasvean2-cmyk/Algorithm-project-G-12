@@ -8,12 +8,12 @@ from urllib.request import urlopen
 
 try:
     import cv2
-except ImportError:  # pragma: no cover - optional camera support
+except ImportError: 
     cv2 = None
 
 try:
     import mediapipe as mp
-except ImportError:  # pragma: no cover - optional camera support
+except ImportError: 
     mp = None
 
 MODEL_URL = (
@@ -116,6 +116,9 @@ class HandTracker:
             self._pinching = False
             return None
 
+        handedness = result.handedness[0][0].category_name
+      
+        hand_side = {"Left": "Right", "Right": "Left"}.get(handedness)
         landmarks = result.hand_landmarks[0]
         tip = landmarks[8]
         thumb = landmarks[4]
@@ -124,7 +127,7 @@ class HandTracker:
             self._pinching = pinch_distance < 0.075
         else:
             self._pinching = pinch_distance < 0.05
-        return (tip.x, tip.y), self._pinching
+        return (tip.x, tip.y), self._pinching, hand_side
 
     @staticmethod
     def _smile_score(blendshapes) -> float:
