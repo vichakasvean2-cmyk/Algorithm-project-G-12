@@ -107,7 +107,7 @@ class MainTests(unittest.TestCase):
             patcher.start()
             self.addCleanup(patcher.stop)
 
-    def test_board_click_is_sent_to_game(self):
+    def test_mouse_click_cannot_move_a_piece(self):
         self.pygame.event.get.side_effect = [
             [SimpleNamespace(type=self.pygame.MOUSEBUTTONDOWN, button=1, pos=(400, 500))],
             [SimpleNamespace(type=self.pygame.MOUSEBUTTONDOWN, button=1, pos=(200, 300))],
@@ -117,7 +117,7 @@ class MainTests(unittest.TestCase):
 
         main.main()
 
-        self.game.click_node.assert_called_once_with(5)
+        self.game.click_node.assert_not_called()
         self.pygame.quit.assert_called_once_with()
 
     def test_camera_startup_progress_is_displayed(self):
@@ -305,10 +305,15 @@ class MainTests(unittest.TestCase):
     def test_completed_round_plays_result_sound(self):
         self.pygame.event.get.side_effect = [
             [SimpleNamespace(type=self.pygame.MOUSEBUTTONDOWN, button=1, pos=(400, 500))],
-            [SimpleNamespace(type=self.pygame.MOUSEBUTTONDOWN, button=1, pos=(200, 300))],
+            [],
             [SimpleNamespace(type=self.pygame.QUIT)],
         ]
         self.renderer.home_start_at.return_value = True
+        self.camera.get_state.side_effect = [
+            (None, None, False, "Show your hand", True),
+            (None, (0.5, 0.5), True, "Show your hand", True),
+            (None, (0.5, 0.5), False, "Show your hand", True),
+        ]
 
         def win_game(_node):
             self.game.winner = "Cows"
@@ -323,12 +328,18 @@ class MainTests(unittest.TestCase):
     def _assert_result_back_returns_home(self, winner):
         self.pygame.event.get.side_effect = [
             [SimpleNamespace(type=self.pygame.MOUSEBUTTONDOWN, button=1, pos=(400, 500))],
-            [SimpleNamespace(type=self.pygame.MOUSEBUTTONDOWN, button=1, pos=(200, 300))],
+            [],
             [SimpleNamespace(type=self.pygame.MOUSEBUTTONDOWN, button=1, pos=(640, 440))],
             [SimpleNamespace(type=self.pygame.QUIT)],
         ]
         self.renderer.home_start_at.return_value = True
         self.renderer.result_back_at.return_value = True
+        self.camera.get_state.side_effect = [
+            (None, None, False, "Show your hand", True),
+            (None, (0.5, 0.5), True, "Show your hand", True),
+            (None, (0.5, 0.5), False, "Show your hand", True),
+            (None, None, False, "Show your hand", True),
+        ]
         self.game.click_node.side_effect = lambda _node: setattr(self.game, "winner", winner) or True
 
         main.main()
@@ -346,18 +357,26 @@ class MainTests(unittest.TestCase):
     def test_camera_pinch_on_result_back_button_returns_home(self):
         self.pygame.event.get.side_effect = [
             [SimpleNamespace(type=self.pygame.MOUSEBUTTONDOWN, button=1, pos=(400, 500))],
-            [SimpleNamespace(type=self.pygame.MOUSEBUTTONDOWN, button=1, pos=(200, 300))],
+            [],
+            [],
             [],
             [SimpleNamespace(type=self.pygame.QUIT)],
         ]
         self.renderer.home_start_at.return_value = True
         self.renderer.result_back_at.return_value = True
+        self.renderer.camera_point_to_board.return_value = (300, 350)
+        self.renderer.camera_point_to_screen.side_effect = [
+            (300, 350),
+            (300, 350),
+            (640, 440),
+        ]
         self.game.click_node.side_effect = lambda _node: setattr(self.game, "winner", "Tigers") or True
         self.camera.get_state.side_effect = [
             (None, None, False, "Show your hand", True),
-            (None, None, False, "Show your hand", True),
+            (None, (0.5, 0.5), True, "Show your hand", True),
+            (None, (0.5, 0.5), False, "Show your hand", True),
             (None, (0.5, 0.61), True, "Show your hand", True),
-            (None, (0.5, 0.61), False, "Show your hand", True),
+            (None, None, False, "Show your hand", True),
         ]
 
         main.main()

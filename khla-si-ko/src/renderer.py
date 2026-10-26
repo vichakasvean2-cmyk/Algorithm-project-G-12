@@ -582,11 +582,11 @@ class GameRenderer:
 
         self._draw_text("HOW TO PLAY", 654, 203, size=27, color=CREAM, bold=True)
         instructions = (
-            "Cows: click any glowing empty square.",
-            "Tigers: click a tiger, then a green square.",
-            "Click the selected tiger again to cancel.",
             "Camera: left hand tigers; right hand cows.",
-            "Mouse: click any move.",
+            "Cows: pinch a glowing empty square.",
+            "Tigers: pinch a tiger, then a green square.",
+            "Pinch the selected tiger again to cancel.",
+            "Mouse: menus only; hands move pieces.",
             "Cows trap; tigers capture by jumping.",
             "R: restart     Esc/H: home",
         )

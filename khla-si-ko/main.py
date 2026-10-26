@@ -186,10 +186,6 @@ def main() -> None:
                     elif not in_game:
                         if renderer.home_start_at(event.pos):
                             request_start()
-                    else:
-                        node = renderer.board_node_at(event.pos)
-                        if node is not None and not renderer.is_animating(game):
-                            apply_node(node)
 
             smile_triggered = camera.consume_smile_trigger()
             if not in_game and not settings_open and countdown_started_at is None and smile_triggered:
