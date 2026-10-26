@@ -1,6 +1,30 @@
 from __future__ import annotations
-
 from dataclasses import dataclass, field
+# from playsound import playsound
+import pygame
+from pathlib import Path
+# display sound 
+if pygame.mixer.get_init() is None:
+    pygame.mixer.init()
+
+# upload sound path
+
+SOUND_PATH = Path(__file__).resolve().parent.parent / "assets" / "tiger win.ogg"
+
+if pygame.mixer.get_init() is None:
+    pygame.mixer.init()
+
+TIGER_WIN_SOUND = None
+
+if SOUND_PATH.exists():
+    TIGER_WIN_SOUND = pygame.mixer.Sound(str(SOUND_PATH))
+    TIGER_WIN_SOUND.set_volume(1.0)
+else:
+    print(f"Sound file not found: {SOUND_PATH}")
+    # end
+# COW_SOUND_PATH 
+
+
 
 BOARD_SIZE = 4
 COW_COUNT = 12
@@ -167,6 +191,12 @@ class TigerCowsGame:
             if self.cows_captured >= self.cow_limit:
                 self.winner = "Tigers"
                 self.status = f"Tigers win! They captured all {self.cow_limit} cows."
+                # read('../')
+                # read sounnd
+                # playsound('../assets/test.ogg')
+                
+                if TIGER_WIN_SOUND is not None:
+                    TIGER_WIN_SOUND.play()
                 return True
             self.turn = "cows"
             if self.cows_remaining == 0 and not self._has_legal_cow_move():

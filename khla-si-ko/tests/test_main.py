@@ -86,6 +86,7 @@ class MainTests(unittest.TestCase):
         self.pygame.time.Clock.return_value = Mock()
         self.game = Mock()
         self.game.winner = None
+        self.game.cows_captured = 0
         self.renderer = Mock()
         self.renderer.board_node_at.return_value = 5
         self.renderer.level_at.return_value = None
@@ -241,6 +242,26 @@ class MainTests(unittest.TestCase):
         self.audio.play.assert_called_once_with("gesture")
         self.camera.close.assert_called_once_with()
 
+    def test_second_hand_can_pinch_click_a_board_square(self):
+        self.pygame.event.get.side_effect = [
+            [SimpleNamespace(type=self.pygame.MOUSEBUTTONDOWN, button=1, pos=(400, 500))],
+            [],
+            [SimpleNamespace(type=self.pygame.QUIT)],
+        ]
+        self.renderer.home_start_at.return_value = True
+        self.camera.get_state.return_value = (None, None, False, "Show hands", True)
+        self.camera.get_hand_states.side_effect = [
+            (("Left", (0.2, 0.3), False), ("Right", (0.5, 0.5), False)),
+            (("Left", (0.2, 0.3), False), ("Right", (0.5, 0.5), True)),
+            (),
+        ]
+
+        with patch.object(main, "play_startup_sound"):
+            main.main()
+
+        self.renderer.camera_point_to_board.assert_called_once_with((0.5, 0.5))
+        self.game.click_node.assert_called_once_with(5)
+
     def test_settings_overlay_toggles_audio_options(self):
         self.pygame.event.get.side_effect = [
             [SimpleNamespace(type=self.pygame.MOUSEBUTTONDOWN, button=1, pos=(900, 600))],
@@ -295,7 +316,55 @@ class MainTests(unittest.TestCase):
 
         main.main()
 
-        self.audio.play.assert_called_once_with("win")
+        self.audio.play.assert_called_once_with("applause")
+
+    def test_tigers_win_plays_applause(self):
+        self.pygame.event.get.side_effect = [
+            [SimpleNamespace(type=self.pygame.MOUSEBUTTONDOWN, button=1, pos=(400, 500))],
+            [SimpleNamespace(type=self.pygame.MOUSEBUTTONDOWN, button=1, pos=(200, 300))],
+            [SimpleNamespace(type=self.pygame.QUIT)],
+        ]
+        self.renderer.home_start_at.return_value = True
+        self.game.click_node.side_effect = lambda _node: setattr(self.game, "winner", "Tigers") or True
+
+        main.main()
+
+        self.audio.play.assert_called_once_with("applause")
+
+    def test_tiger_capture_does_not_play_synthetic_roar(self):
+        self.pygame.event.get.side_effect = [
+            [SimpleNamespace(type=self.pygame.MOUSEBUTTONDOWN, button=1, pos=(400, 500))],
+            [SimpleNamespace(type=self.pygame.MOUSEBUTTONDOWN, button=1, pos=(200, 300))],
+            [SimpleNamespace(type=self.pygame.QUIT)],
+        ]
+        self.renderer.home_start_at.return_value = True
+
+        self.game.click_node.return_value = True
+
+        main.main()
+
+        self.audio.play.assert_not_called()
+
+    def test_final_tiger_capture_plays_roar_and_applause(self):
+        self.pygame.event.get.side_effect = [
+            [SimpleNamespace(type=self.pygame.MOUSEBUTTONDOWN, button=1, pos=(400, 500))],
+            [SimpleNamespace(type=self.pygame.MOUSEBUTTONDOWN, button=1, pos=(200, 300))],
+            [SimpleNamespace(type=self.pygame.QUIT)],
+        ]
+        self.renderer.home_start_at.return_value = True
+
+        def final_capture(_node):
+            self.game.winner = "Tigers"
+            return True
+
+        self.game.click_node.side_effect = final_capture
+
+        main.main()
+
+        self.assertEqual(
+            [call.args for call in self.audio.play.call_args_list],
+            [("applause",)],
+        )
 
     def _assert_result_back_returns_home(self, winner):
         self.pygame.event.get.side_effect = [

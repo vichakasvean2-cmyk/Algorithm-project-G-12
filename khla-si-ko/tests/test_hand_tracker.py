@@ -82,6 +82,57 @@ class HandTrackerTests(unittest.TestCase):
         cv2.cvtColor.assert_called_once_with(frame, cv2.COLOR_BGR2RGB)
         landmarker.detect.assert_called_once_with(image)
 
+    def test_detect_hands_tracks_two_hands_with_independent_pinch_state(self):
+        def make_landmarks(tip_x, thumb_x):
+            landmarks = [SimpleNamespace(x=0.2, y=0.3) for _ in range(21)]
+            landmarks[8] = SimpleNamespace(x=tip_x, y=0.5)
+            landmarks[4] = SimpleNamespace(x=thumb_x, y=0.5)
+            return landmarks
+
+        results = [
+            SimpleNamespace(
+                hand_landmarks=[make_landmarks(0.4, 0.44), make_landmarks(0.7, 0.8)],
+                handedness=[
+                    [SimpleNamespace(category_name="Left")],
+                    [SimpleNamespace(category_name="Right")],
+                ],
+            ),
+            SimpleNamespace(
+                hand_landmarks=[make_landmarks(0.4, 0.46), make_landmarks(0.7, 0.74)],
+                handedness=[
+                    [SimpleNamespace(category_name="Left")],
+                    [SimpleNamespace(category_name="Right")],
+                ],
+            ),
+        ]
+        landmarker = Mock()
+        landmarker.detect.side_effect = results
+        tracker = HandTracker.__new__(HandTracker)
+        tracker.landmarker = landmarker
+        tracker._pinching = False
+        tracker._pinching_by_hand = {}
+        cv2 = SimpleNamespace(COLOR_BGR2RGB=1, cvtColor=Mock(return_value=object()))
+        mp = SimpleNamespace(
+            Image=Mock(return_value=object()),
+            ImageFormat=SimpleNamespace(SRGB=2),
+        )
+
+        with (
+            patch.object(hand_tracker_module, "cv2", cv2),
+            patch.object(hand_tracker_module, "mp", mp),
+        ):
+            first = tracker.detect_hands(object())
+            second = tracker.detect_hands(object())
+
+        self.assertEqual(
+            first,
+            (("Left", (0.4, 0.5), True), ("Right", (0.7, 0.5), False)),
+        )
+        self.assertEqual(
+            second,
+            (("Left", (0.4, 0.5), True), ("Right", (0.7, 0.5), True)),
+        )
+
     def test_detect_reports_not_pinching_when_fingers_are_apart(self):
         landmarks = [SimpleNamespace(x=0.2, y=0.3) for _ in range(21)]
         landmarks[8] = SimpleNamespace(x=0.4, y=0.5)

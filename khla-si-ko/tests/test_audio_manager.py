@@ -12,6 +12,13 @@ class AudioManagerTests(unittest.TestCase):
         self.assertEqual(samples[:2], b"\x00\x00")
         self.assertEqual(samples[-2:], b"\x00\x00")
 
+    def test_applause_samples_are_nonempty_and_silent_at_both_ends(self):
+        samples = audio_manager._applause_samples()
+
+        self.assertGreater(len(samples), 0)
+        self.assertEqual(samples[:2], b"\x00\x00")
+        self.assertEqual(samples[-2:], b"\x00\x00")
+
     def test_sounds_are_cached_and_played_when_enabled(self):
         fake_pygame = Mock()
         fake_pygame.mixer.get_init.return_value = (22050, -16, 1)
@@ -20,8 +27,8 @@ class AudioManagerTests(unittest.TestCase):
 
         with patch.object(audio_manager, "pygame", fake_pygame):
             manager = audio_manager.AudioManager()
-            manager.play("win")
-            manager.play("win")
+            manager.play("applause")
+            manager.play("applause")
 
         fake_pygame.mixer.Sound.assert_called_once()
         self.assertEqual(sound.play.call_count, 2)

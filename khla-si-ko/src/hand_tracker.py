@@ -36,6 +36,7 @@ class HandTracker:
         self.error = None
         self.smile_error = None
         self._pinching = False
+        self._pinching_by_hand = {}
         self._smile_started_at = None
         self._smiling = False
         self.smile_triggered = False
@@ -49,7 +50,7 @@ class HandTracker:
             options = mp.tasks.vision.HandLandmarkerOptions(
                 base_options=mp.tasks.BaseOptions(model_asset_path=str(model_path)),
                 running_mode=mp.tasks.vision.RunningMode.IMAGE,
-                num_hands=1,
+                num_hands=2,
                 min_hand_detection_confidence=0.6,
                 min_tracking_confidence=0.5,
             )
@@ -105,26 +106,43 @@ class HandTracker:
     def available(self) -> bool:
         return self.landmarker is not None
 
-    def detect(self, frame):
+    def detect_hands(self, frame):
         if self.landmarker is None or frame is None:
-            return None
+            return ()
 
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
         result = self.landmarker.detect(image)
         if not result.hand_landmarks:
             self._pinching = False
-            return None
+            self._pinching_by_hand = {}
+            return ()
 
-        landmarks = result.hand_landmarks[0]
-        tip = landmarks[8]
-        thumb = landmarks[4]
-        pinch_distance = ((tip.x - thumb.x) ** 2 + (tip.y - thumb.y) ** 2) ** 0.5
-        if self._pinching:
-            self._pinching = pinch_distance < 0.075
-        else:
-            self._pinching = pinch_distance < 0.05
-        return (tip.x, tip.y), self._pinching
+        previous_pinching = getattr(self, "_pinching_by_hand", {})
+        pinching_by_hand = {}
+        hands = []
+        for index, landmarks in enumerate(result.hand_landmarks):
+            handedness = getattr(result, "handedness", ())
+            categories = handedness[index] if index < len(handedness) else ()
+            hand_id = categories[0].category_name if categories else f"hand-{index}"
+            tip = landmarks[8]
+            thumb = landmarks[4]
+            pinch_distance = ((tip.x - thumb.x) ** 2 + (tip.y - thumb.y) ** 2) ** 0.5
+            was_pinching = previous_pinching.get(hand_id, False)
+            pinching = pinch_distance < (0.075 if was_pinching else 0.05)
+            pinching_by_hand[hand_id] = pinching
+            hands.append((hand_id, (tip.x, tip.y), pinching))
+
+        self._pinching_by_hand = pinching_by_hand
+        self._pinching = hands[0][2]
+        return tuple(hands)
+
+    def detect(self, frame):
+        hands = self.detect_hands(frame)
+        if not hands:
+            return None
+        return hands[0][1], hands[0][2]
+
 
     @staticmethod
     def _smile_score(blendshapes) -> float:

@@ -4,11 +4,13 @@ import math
 import struct
 import sys
 import time
+# import pygame
 
 from src.audio_manager import AudioManager
 from src.camera_control import CameraControl
 from src.config import FPS, WINDOW_HEIGHT, WINDOW_WIDTH
 from src.renderer import GameRenderer
+from pathlib import Path
 from src.tiger_cows_game import TigerCowsGame
 
 try:
@@ -17,6 +19,17 @@ except ImportError:  # pragma: no cover - runtime dependency check
     pygame = None
 
 COUNTDOWN_SECONDS = 2
+
+# if pygame.mixer.get_init() is None:
+#     pygame.mixer.init()
+
+# SOUND_PATH = Path(__file__).resolve().parent / "assets" / "test.ogg"
+
+# print("Sound path:", SOUND_PATH)
+# print("File exists:", SOUND_PATH.exists())
+
+# TIGER_WIN_SOUND = pygame.mixer.Sound(str(SOUND_PATH))
+# TIGER_WIN_SOUND.set_volume(88.0)
 
 
 def _startup_sound_samples(sample_rate: int = 22050, duration: float = 0.7) -> bytes:
@@ -66,7 +79,7 @@ def main() -> None:
     game = TigerCowsGame()
     camera = CameraControl()
     audio = AudioManager()
-    previous_pinching = False
+    previous_hand_pinching = {}
     in_game = False
     settings_open = False
     countdown_started_at: float | None = None
@@ -100,7 +113,7 @@ def main() -> None:
         winner = game.winner
         if winner is not None:
             if winner != last_announced_winner:
-                result_sound = "draw" if winner == "Draw" else "win" if winner == "Cows" else "lose"
+                result_sound = "draw" if winner == "Draw" else "applause"
                 audio.play(result_sound)
                 last_announced_winner = winner
         elif gesture:
@@ -150,6 +163,11 @@ def main() -> None:
         running = True
         while running:
             camera_frame, camera_point, pinching, camera_status, camera_ready = camera.get_state()
+            hand_states = camera.get_hand_states()
+            if not isinstance(hand_states, (tuple, list)):
+                hand_states = ()
+            if not hand_states and camera_point is not None:
+                hand_states = (("primary", camera_point, pinching),)
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -213,20 +231,24 @@ def main() -> None:
             if not in_game and not settings_open and countdown_started_at is None and smile_triggered:
                 request_start()
 
-            camera_screen_position = (
-                renderer.camera_point_to_screen(camera_point, screen.get_size())
-                if camera_point is not None
-                else None
+            hand_positions = tuple(
+                (
+                    hand_id,
+                    point,
+                    hand_pinching,
+                    renderer.camera_point_to_screen(point, screen.get_size()),
+                )
+                for hand_id, point, hand_pinching in hand_states
             )
-            camera_ui_target = (
-                camera_screen_position is not None
-                and renderer.camera_ui_target_at(
-                    camera_screen_position,
+            camera_ui_targets = {
+                hand_id: renderer.camera_ui_target_at(
+                    screen_position,
                     in_game,
                     settings_open,
                     game.winner is not None,
                 )
-            )
+                for hand_id, _, _, screen_position in hand_positions
+            }
 
             countdown_value: int | None = None
             if countdown_started_at is not None:
@@ -239,10 +261,13 @@ def main() -> None:
                         audio.play("countdown")
                         last_countdown_number = countdown_value
 
-            if camera_screen_position is not None and pinching and not previous_pinching:
-                board_position = renderer.camera_point_to_board(camera_point)
-                handle_camera_click(camera_screen_position, board_position)
-            previous_pinching = pinching
+            current_hand_pinching = {}
+            for hand_id, point, hand_pinching, screen_position in hand_positions:
+                current_hand_pinching[hand_id] = hand_pinching
+                if hand_pinching and not previous_hand_pinching.get(hand_id, False):
+                    board_position = renderer.camera_point_to_board(point)
+                    handle_camera_click(screen_position, board_position)
+            previous_hand_pinching = current_hand_pinching
 
             if not camera_ready:
                 camera_status = camera_status or "Starting camera..."
@@ -260,8 +285,11 @@ def main() -> None:
                     screen,
                     game,
                     camera_frame=camera_frame,
-                    camera_point=None if camera_ui_target else camera_point,
-                    pinching=pinching,
+                    camera_hands=tuple(
+                        (point, hand_pinching)
+                        for hand_id, point, hand_pinching, _ in hand_positions
+                        if not camera_ui_targets[hand_id]
+                    ),
                     camera_status=camera_status,
                 )
             else:
@@ -276,10 +304,9 @@ def main() -> None:
                     gesture_enabled=audio.gesture_enabled,
                     audio_available=audio.available,
                 )
-            if camera_screen_position is not None and (
-                not in_game or settings_open or camera_ui_target
-            ):
-                renderer.draw_camera_pointer(camera_screen_position, pinching)
+            for hand_id, _, hand_pinching, screen_position in hand_positions:
+                if not in_game or settings_open or camera_ui_targets[hand_id]:
+                    renderer.draw_camera_pointer(screen_position, hand_pinching)
             pygame.display.flip()
             clock.tick(FPS)
     finally:

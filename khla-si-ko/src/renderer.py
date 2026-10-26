@@ -570,6 +570,7 @@ class GameRenderer:
         camera_point: tuple[float, float] | None = None,
         pinching: bool = False,
         camera_status: str = "Starting camera...",
+        camera_hands: tuple[tuple[tuple[float, float], bool], ...] | None = None,
     ) -> None:
         if pygame is None:
             return
@@ -639,7 +640,7 @@ class GameRenderer:
             "Cows: click any glowing empty square.",
             "Tigers: click a tiger, then a green square.",
             "Click the selected tiger again to cancel.",
-            "Mouse: click. Camera: point and pinch.",
+            "Mouse: click. Camera: pinch with either hand.",
             "Cows trap; tigers capture by jumping.",
             "R: restart     Esc/H: home",
         )
@@ -653,11 +654,14 @@ class GameRenderer:
         self._draw_wrapped_text(game.status, 668, 547, 270, 15, CREAM, 17)
 
         self._draw_camera_preview(camera_frame, camera_status)
-        if camera_point is not None:
-            hand_x, hand_y = self.camera_point_to_board(camera_point)
-            cursor_color = (255, 222, 82) if pinching else (94, 233, 161)
+        visible_hands = camera_hands
+        if visible_hands is None and camera_point is not None:
+            visible_hands = ((camera_point, pinching),)
+        for hand_point, hand_pinching in visible_hands or ():
+            hand_x, hand_y = self.camera_point_to_board(hand_point)
+            cursor_color = (255, 222, 82) if hand_pinching else (94, 233, 161)
             pygame.draw.circle(screen, cursor_color, (hand_x, hand_y), 23, 4)
-            if pinching:
+            if hand_pinching:
                 pygame.draw.circle(screen, cursor_color, (hand_x, hand_y), 8)
 
         self._draw_text("Mouse clicks work too  |  Esc/H: home  |  Q: quit", 654, 650, size=17, color=CREAM)
